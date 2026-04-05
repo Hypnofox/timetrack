@@ -1,9 +1,10 @@
 import React from 'react';
 
 const TABS = [
-  { id: 'log',     label: 'Log Time' },
-  { id: 'entries', label: 'Entries' },
-  { id: 'report',  label: 'Report' },
+  { id: 'log',          label: 'Log Time' },
+  { id: 'entries',      label: 'Entries' },
+  { id: 'report',       label: 'Report' },
+  { id: 'integrations', label: 'Integrations' },
 ];
 
 export default function TabNav({ activeTab, onTabChange }) {

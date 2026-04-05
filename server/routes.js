@@ -13,6 +13,29 @@ const VALID_CATEGORIES = [
   'Email / Async Comms',
   'Escalation to Dev',
 ];
+const VALID_SOURCES = ['manual', 'intercom', 'gcal', 'notion'];
+
+// Webhook secret — set WEBHOOK_SECRET env var to secure the endpoints
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
+
+function verifyWebhookSecret(req, res) {
+  if (!WEBHOOK_SECRET) return true; // no secret configured = open
+  const provided = req.headers['x-webhook-secret'] || req.query.secret;
+  if (provided !== WEBHOOK_SECRET) {
+    res.status(401).json({ error: 'Invalid webhook secret' });
+    return false;
+  }
+  return true;
+}
+
+function insertEntry({ user, category, customer, notes, minutes, date, source }) {
+  const stmt = db.prepare(`
+    INSERT INTO entries (user, category, customer, notes, minutes, date, source, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+  const result = stmt.run(user, category, customer.trim(), notes || '', minutes, date, source);
+  return db.prepare('SELECT * FROM entries WHERE id = ?').get(result.lastInsertRowid);
+}
 
 // GET /api/entries
 router.get('/entries', (req, res) => {
@@ -74,12 +97,7 @@ router.post('/entries', (req, res) => {
   }
 
   try {
-    const stmt = db.prepare(`
-      INSERT INTO entries (user, category, customer, notes, minutes, date, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
-    const result = stmt.run(user, category, customer.trim(), notes || '', minutes, date);
-    const entry = db.prepare('SELECT * FROM entries WHERE id = ?').get(result.lastInsertRowid);
+    const entry = insertEntry({ user, category, customer, notes, minutes, date, source: 'manual' });
     res.status(201).json(entry);
   } catch (err) {
     console.error(err);
@@ -214,6 +232,180 @@ router.get('/users', (req, res) => {
 // GET /api/categories
 router.get('/categories', (req, res) => {
   res.json(VALID_CATEGORIES);
+});
+
+// ---------------------------------------------------------------------------
+// WEBHOOKS — receive data from Intercom, Google Calendar, Notion (or Make.com)
+// ---------------------------------------------------------------------------
+
+// POST /api/webhook/intercom
+// Expected payload (from Make.com or direct Intercom webhook):
+// { user, ticket_id, subject, customer, closed_at, handle_time_minutes }
+router.post('/webhook/intercom', (req, res) => {
+  if (!verifyWebhookSecret(req, res)) return;
+
+  try {
+    const { user, ticket_id, subject, customer, closed_at, handle_time_minutes } = req.body;
+
+    if (!user || !VALID_USERS.includes(user)) {
+      return res.status(400).json({ error: 'Invalid or missing user' });
+    }
+    const minutes = Math.round(Number(handle_time_minutes));
+    if (!minutes || minutes <= 0) {
+      return res.status(400).json({ error: 'handle_time_minutes must be a positive number' });
+    }
+    const rawDate = closed_at ? new Date(closed_at) : new Date();
+    const date = rawDate.toISOString().slice(0, 10);
+    const customerName = (customer || ticket_id || 'Unknown').toString().trim();
+    const notes = subject ? `Ticket: ${subject}` : (ticket_id ? `#${ticket_id}` : '');
+
+    const entry = insertEntry({
+      user, category: 'Intercom Ticket', customer: customerName,
+      notes, minutes, date, source: 'intercom',
+    });
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('Intercom webhook error:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// POST /api/webhook/gcal
+// Expected payload (from Make.com Google Calendar trigger):
+// { user, event_title, customer, start_time, end_time }
+router.post('/webhook/gcal', (req, res) => {
+  if (!verifyWebhookSecret(req, res)) return;
+
+  try {
+    const { user, event_title, customer, start_time, end_time } = req.body;
+
+    if (!user || !VALID_USERS.includes(user)) {
+      return res.status(400).json({ error: 'Invalid or missing user' });
+    }
+    if (!start_time || !end_time) {
+      return res.status(400).json({ error: 'start_time and end_time are required' });
+    }
+    const start = new Date(start_time);
+    const end = new Date(end_time);
+    const minutes = Math.round((end - start) / 60000);
+    if (minutes <= 0) {
+      return res.status(400).json({ error: 'end_time must be after start_time' });
+    }
+    const date = start.toISOString().slice(0, 10);
+    const customerName = (customer || event_title || 'Unknown').toString().trim();
+
+    const entry = insertEntry({
+      user, category: 'Customer Call / Demo', customer: customerName,
+      notes: event_title || '', minutes, date, source: 'gcal',
+    });
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('GCal webhook error:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// POST /api/webhook/notion
+// Expected payload (from Make.com Notion trigger):
+// { user, task_name, customer, category, estimated_minutes, completed_date }
+router.post('/webhook/notion', (req, res) => {
+  if (!verifyWebhookSecret(req, res)) return;
+
+  try {
+    const { user, task_name, customer, category, estimated_minutes, completed_date } = req.body;
+
+    if (!user || !VALID_USERS.includes(user)) {
+      return res.status(400).json({ error: 'Invalid or missing user' });
+    }
+    const resolvedCategory = VALID_CATEGORIES.includes(category) ? category : 'Documentation / KB';
+    const minutes = Math.round(Number(estimated_minutes));
+    if (!minutes || minutes <= 0) {
+      return res.status(400).json({ error: 'estimated_minutes must be a positive number' });
+    }
+    const rawDate = completed_date ? new Date(completed_date) : new Date();
+    const date = rawDate.toISOString().slice(0, 10);
+    const customerName = (customer || task_name || 'Internal').toString().trim();
+
+    const entry = insertEntry({
+      user, category: resolvedCategory, customer: customerName,
+      notes: task_name || '', minutes, date, source: 'notion',
+    });
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('Notion webhook error:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// POST /api/entries/bulk
+// Generic bulk import — accepts array of entries (used by Make.com or CSV import)
+// Each entry: { user, category, customer, notes, minutes, date, source }
+router.post('/entries/bulk', (req, res) => {
+  if (!verifyWebhookSecret(req, res)) return;
+
+  const { entries } = req.body;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ error: 'entries must be a non-empty array' });
+  }
+  if (entries.length > 500) {
+    return res.status(400).json({ error: 'Maximum 500 entries per bulk request' });
+  }
+
+  const results = [];
+  const errors = [];
+
+  const importMany = db.transaction(() => {
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (!e.user || !VALID_USERS.includes(e.user)) {
+        errors.push({ index: i, error: 'Invalid user' }); continue;
+      }
+      if (!e.category || !VALID_CATEGORIES.includes(e.category)) {
+        errors.push({ index: i, error: 'Invalid category' }); continue;
+      }
+      if (!e.customer || !e.customer.toString().trim()) {
+        errors.push({ index: i, error: 'Missing customer' }); continue;
+      }
+      const minutes = Math.round(Number(e.minutes));
+      if (!minutes || minutes <= 0) {
+        errors.push({ index: i, error: 'Invalid minutes' }); continue;
+      }
+      if (!e.date || !/^\d{4}-\d{2}-\d{2}$/.test(e.date)) {
+        errors.push({ index: i, error: 'Invalid date (YYYY-MM-DD required)' }); continue;
+      }
+      const source = VALID_SOURCES.includes(e.source) ? e.source : 'manual';
+      results.push(insertEntry({ ...e, minutes, source }));
+    }
+  });
+
+  try {
+    importMany();
+    res.status(201).json({ imported: results.length, errors });
+  } catch (err) {
+    console.error('Bulk import error:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// GET /api/webhook/info — returns webhook URLs and setup instructions
+router.get('/webhook/info', (req, res) => {
+  const base = req.protocol + '://' + req.get('host');
+  res.json({
+    endpoints: {
+      intercom: `${base}/api/webhook/intercom`,
+      gcal:     `${base}/api/webhook/gcal`,
+      notion:   `${base}/api/webhook/notion`,
+      bulk:     `${base}/api/entries/bulk`,
+    },
+    auth: WEBHOOK_SECRET
+      ? 'Set header: x-webhook-secret: <your-secret>'
+      : 'No secret configured (open). Set WEBHOOK_SECRET env var to secure.',
+    payloads: {
+      intercom: { user: 'Egor', ticket_id: '12345', subject: 'API not working', customer: 'Acme Corp', closed_at: '2024-01-15T14:30:00Z', handle_time_minutes: 45 },
+      gcal:     { user: 'Yonatan', event_title: 'Onboarding Call', customer: 'Beta Inc', start_time: '2024-01-15T10:00:00Z', end_time: '2024-01-15T11:00:00Z' },
+      notion:   { user: 'Mariano', task_name: 'Write migration guide', customer: 'Internal', category: 'Documentation / KB', estimated_minutes: 90, completed_date: '2024-01-15' },
+    },
+  });
 });
 
 module.exports = router;

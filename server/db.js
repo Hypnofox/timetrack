@@ -26,12 +26,20 @@ db.exec(`
     notes      TEXT    DEFAULT '',
     minutes    INTEGER NOT NULL,
     date       TEXT    NOT NULL,
+    source     TEXT    NOT NULL DEFAULT 'manual',
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE INDEX IF NOT EXISTS idx_entries_user     ON entries(user);
   CREATE INDEX IF NOT EXISTS idx_entries_date     ON entries(date);
   CREATE INDEX IF NOT EXISTS idx_entries_category ON entries(category);
+  CREATE INDEX IF NOT EXISTS idx_entries_source   ON entries(source);
 `);
+
+// Add source column to existing databases (idempotent migration)
+const cols = db.prepare("PRAGMA table_info(entries)").all();
+if (!cols.find(c => c.name === 'source')) {
+  db.exec("ALTER TABLE entries ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+}
 
 module.exports = db;

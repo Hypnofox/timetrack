@@ -4,6 +4,32 @@ import { fetchEntries, deleteEntry } from '../api';
 import { formatDuration, currentMonthISO, exportCSV } from '../utils';
 import CategoryBadge from './CategoryBadge';
 
+const SOURCE_META = {
+  manual:  { label: 'Manual',   color: '#6b7594' },
+  intercom:{ label: 'Intercom', color: '#4f8ef7' },
+  gcal:    { label: 'GCal',     color: '#4fde8a' },
+  notion:  { label: 'Notion',   color: '#a04ff7' },
+};
+
+function SourceBadge({ source }) {
+  const meta = SOURCE_META[source] || SOURCE_META.manual;
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 7px',
+      borderRadius: '4px',
+      fontSize: '11px',
+      fontFamily: 'var(--font-mono)',
+      background: meta.color + '22',
+      color: meta.color,
+      border: `1px solid ${meta.color}44`,
+      whiteSpace: 'nowrap',
+    }}>
+      {meta.label}
+    </span>
+  );
+}
+
 export default function Entries({ activeUser, isAdmin }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -97,13 +123,14 @@ export default function Entries({ activeUser, isAdmin }) {
               <th>Customer / Ticket</th>
               <th>Notes</th>
               <th className="col-duration">Duration</th>
+              <th>Source</th>
               <th className="col-action"></th>
             </tr>
           </thead>
           <tbody>
             {!loading && entries.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 7 : 6} className="table-empty">
+                <td colSpan={isAdmin ? 8 : 7} className="table-empty">
                   No entries found for this period.
                 </td>
               </tr>
@@ -116,6 +143,7 @@ export default function Entries({ activeUser, isAdmin }) {
                 <td className="cell-customer">{entry.customer}</td>
                 <td className="cell-notes">{entry.notes || <span className="muted">—</span>}</td>
                 <td className="mono col-duration">{formatDuration(entry.minutes)}</td>
+                <td><SourceBadge source={entry.source || 'manual'} /></td>
                 <td className="col-action">
                   {canDelete(entry) && (
                     <button

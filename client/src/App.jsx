@@ -4,6 +4,7 @@ import TabNav from './components/TabNav';
 import LogTime from './components/LogTime';
 import Entries from './components/Entries';
 import Report from './components/Report';
+import Integrations from './components/Integrations';
 import { ADMIN_USER } from './constants';
 
 export default function App() {
@@ -44,6 +45,9 @@ export default function App() {
         )}
         {activeTab === 'report' && (
           <Report activeUser={activeUser} isAdmin={isAdmin} />
+        )}
+        {activeTab === 'integrations' && (
+          <Integrations isAdmin={isAdmin} />
         )}
       </main>
     </div>
