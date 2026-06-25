@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('./db');
 
+function requireAuth(req, res, next) {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  next();
+}
+
+// All /api routes require a valid session
+router.use(requireAuth);
+
 const ADMIN_USER = 'Egor';
 const VALID_USERS = ['Egor', 'Yonatan', 'Mariano', 'Ben'];
 const VALID_CATEGORIES = [

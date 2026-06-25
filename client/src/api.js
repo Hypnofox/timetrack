@@ -1,38 +1,48 @@
 const BASE = '/api';
 
-export async function fetchEntries({ user, month, category } = {}) {
-  const params = new URLSearchParams();
-  if (user) params.set('user', user);
-  if (month) params.set('month', month);
-  if (category) params.set('category', category);
-  const res = await fetch(`${BASE}/entries?${params}`);
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, { credentials: 'include', ...options });
+  if (res.status === 401) throw Object.assign(new Error('Unauthenticated'), { status: 401 });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
+export async function fetchMe() {
+  const res = await fetch('/auth/me', { credentials: 'include' });
+  if (!res.ok) return { authenticated: false };
+  return res.json();
+}
+
+// ── Entries ──────────────────────────────────────────────────────────────────
+export async function fetchEntries({ user, month, category } = {}) {
+  const p = new URLSearchParams();
+  if (user) p.set('user', user);
+  if (month) p.set('month', month);
+  if (category) p.set('category', category);
+  return apiFetch(`${BASE}/entries?${p}`);
+}
+
 export async function createEntry(data) {
-  const res = await fetch(`${BASE}/entries`, {
+  return apiFetch(`${BASE}/entries`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 export async function deleteEntry(id, user) {
-  const res = await fetch(`${BASE}/entries/${id}?user=${encodeURIComponent(user)}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`${BASE}/entries/${id}?user=${encodeURIComponent(user)}`, { method: 'DELETE' });
 }
 
 export async function fetchReportSummary({ user, month } = {}) {
-  const params = new URLSearchParams();
-  if (user) params.set('user', user);
-  if (month) params.set('month', month);
-  const res = await fetch(`${BASE}/report/summary?${params}`);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const p = new URLSearchParams();
+  if (user) p.set('user', user);
+  if (month) p.set('month', month);
+  return apiFetch(`${BASE}/report/summary?${p}`);
+}
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+export async function fetchCalendarToday() {
+  return apiFetch(`${BASE}/calendar/today`);
 }

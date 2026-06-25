@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CATEGORIES } from '../constants';
-import { createEntry } from '../api';
+import { createEntry, fetchCalendarToday } from '../api';
 import { todayISO, formatSeconds, formatDuration } from '../utils';
 
 export default function LogTime({ activeUser }) {
-  const [mode, setMode] = useState('timer'); // 'timer' | 'manual'
+  const [mode, setMode] = useState('timer'); // 'timer' | 'manual' | 'calendar'
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -36,16 +36,26 @@ export default function LogTime({ activeUser }) {
           >
             Manual Entry
           </button>
+          <button
+            className={`mode-btn${mode === 'calendar' ? ' mode-btn--active' : ''}`}
+            onClick={() => setMode('calendar')}
+          >
+            📅 Import from Calendar
+          </button>
         </div>
       </div>
 
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
       {errorMsg && <div className="alert alert-error">{errorMsg}</div>}
 
-      {mode === 'timer' ? (
+      {mode === 'timer' && (
         <TimerMode activeUser={activeUser} onSuccess={showSuccess} onError={showError} />
-      ) : (
+      )}
+      {mode === 'manual' && (
         <ManualMode activeUser={activeUser} onSuccess={showSuccess} onError={showError} />
+      )}
+      {mode === 'calendar' && (
+        <CalendarMode activeUser={activeUser} onSuccess={showSuccess} onError={showError} />
       )}
     </div>
   );
@@ -319,6 +329,114 @@ function ManualMode({ activeUser, onSuccess, onError }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Calendar Import Mode ─────────────────────────────────────────────────────
+
+function CalendarMode({ activeUser, onSuccess, onError }) {
+  const [events, setEvents] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [logging, setLogging] = useState({});
+  const [overrides, setOverrides] = useState({});
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchCalendarToday();
+      setEvents(data);
+      const initial = {};
+      data.forEach(e => { initial[e.calId] = e.suggestedCategory; });
+      setOverrides(initial);
+    } catch (err) {
+      onError(err.message || 'Failed to fetch calendar events.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const logEvent = async (event) => {
+    const category = overrides[event.calId] || event.suggestedCategory;
+    setLogging(prev => ({ ...prev, [event.calId]: true }));
+    try {
+      await createEntry({
+        user: activeUser,
+        category,
+        customer: event.title,
+        notes: `Imported from Google Calendar`,
+        minutes: event.minutes,
+        date: event.start.slice(0, 10),
+      });
+      onSuccess(`Logged ${formatDuration(event.minutes)} — ${event.title}`);
+      setEvents(prev => prev.filter(e => e.calId !== event.calId));
+    } catch {
+      onError('Failed to log event.');
+    } finally {
+      setLogging(prev => ({ ...prev, [event.calId]: false }));
+    }
+  };
+
+  if (loading) {
+    return <div className="card" style={{ textAlign: 'center', color: '#6b7594', padding: '2rem' }}>Fetching today's calendar…</div>;
+  }
+
+  if (!events) return null;
+
+  if (events.length === 0) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+        <p style={{ color: '#6b7594', marginBottom: '1rem' }}>No calendar events found for today.</p>
+        <button className="btn btn-ghost" onClick={load}>↻ Refresh</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <span style={{ fontSize: '13px', color: '#6b7594' }}>{events.length} event{events.length !== 1 ? 's' : ''} found today</span>
+        <button className="btn btn-ghost btn-sm" onClick={load}>↻ Refresh</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {events.map(event => {
+          const start = new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const end   = new Date(event.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return (
+            <div key={event.calId} style={{
+              background: '#252a3a', borderRadius: '8px', padding: '12px 14px',
+              display: 'flex', gap: '12px', alignItems: 'flex-start',
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500, marginBottom: '4px' }}>{event.title}</div>
+                <div style={{ fontSize: '12px', color: '#6b7594', fontFamily: 'var(--font-mono)' }}>
+                  {start} – {end} · {formatDuration(event.minutes)}
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <select
+                    className="form-select"
+                    value={overrides[event.calId] || event.suggestedCategory}
+                    onChange={e => setOverrides(prev => ({ ...prev, [event.calId]: e.target.value }))}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => logEvent(event)}
+                disabled={logging[event.calId]}
+                style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}
+              >
+                {logging[event.calId] ? '…' : '+ Log'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

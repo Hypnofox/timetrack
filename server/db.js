@@ -42,4 +42,14 @@ if (!cols.find(c => c.name === 'source')) {
   db.exec("ALTER TABLE entries ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
 }
 
+// OAuth token storage
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tokens (
+    user          TEXT PRIMARY KEY,
+    access_token  TEXT NOT NULL,
+    refresh_token TEXT,
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 module.exports = db;
