@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faddom Support Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #252a3a;
+      --border:    #2e3348;
+      --text:      #e2e8f0;
+      --muted:     #6b7594;
+      --accent:    #4f8ef7;
+      --green:     #4fde8a;
+      --yellow:    #f7c94f;
+      --red:       #f74f7a;
+      --purple:    #a04ff7;
+      --orange:    #f78a4f;
+      --teal:      #4fe8f7;
+      --radius:    10px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Screen: User Select ─────────────────────────────────── */
+    #screen-user {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .user-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+
+    .user-card .logo { font-size: 2.5rem; margin-bottom: 1rem; }
+    .user-card h1 { font-size: 22px; font-weight: 600; margin-bottom: .5rem; }
+    .user-card p { color: var(--muted); margin-bottom: 2rem; font-size: 13px; }
+
+    .user-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+
+    .user-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+
+    .user-btn:hover { background: var(--border); border-color: var(--accent); }
+    .user-btn.admin { border-color: var(--yellow); color: var(--yellow); }
+    .user-btn.admin:hover { background: rgba(247,201,79,.1); }
+
+    /* ── Main App ─────────────────────────────────────────────── */
+    #screen-app { display: none; max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      gap: 1rem;
+    }
+
+    .header-brand { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; }
+    .header-brand span:first-child { font-size: 1.4rem; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .user-pill {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: .5px;
+    }
+
+    .badge-admin { background: rgba(247,201,79,.2); color: var(--yellow); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; margin-bottom: 1.5rem; }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+
+    .tab-btn.active { background: var(--surface2); color: var(--text); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* Metric Cards */
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--c, var(--accent));
+    }
+
+    .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .metric-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono); color: var(--text); }
+    .metric-sub { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 1rem; }
+
+    /* Mode toggle */
+    .mode-toggle { display: flex; gap: 6px; margin-bottom: 1rem; }
+
+    .mode-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+
+    .mode-btn.active { background: var(--surface2); border-color: var(--accent); color: var(--text); }
+
+    /* Timer */
+    .timer-display {
+      font-family: var(--font-mono);
+      font-size: 52px;
+      font-weight: 300;
+      text-align: center;
+      padding: 1.5rem 0;
+      color: var(--text);
+      letter-spacing: 2px;
+    }
+
+    .timer-display.running { color: var(--green); }
+
+    /* Form elements */
+    .form-group { margin-bottom: 12px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid .span-full { grid-column: 1 / -1; }
+
+    label.form-label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 5px; }
+
+    input, select, textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      transition: border-color .15s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    input[type="number"] { font-family: var(--font-mono); }
+
+    textarea { resize: vertical; min-height: 60px; }
+
+    select option { background: var(--surface2); }
+
+    /* Buttons */
+    .btn {
+      padding: 9px 18px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all .15s;
+      font-family: var(--font-sans);
+    }
+
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #3a7de8; border-color: #3a7de8; }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-ghost { background: transparent; color: var(--muted); }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+    .btn-danger { background: rgba(247,79,122,.1); border-color: rgba(247,79,122,.3); color: var(--red); }
+    .btn-danger:hover { background: rgba(247,79,122,.2); }
+
+    .btn-success { background: rgba(79,222,138,.1); border-color: rgba(79,222,138,.3); color: var(--green); }
+    .btn-success:hover { background: rgba(79,222,138,.2); }
+
+    .btn-warning { background: rgba(247,201,79,.1); border-color: rgba(247,201,79,.3); color: var(--yellow); }
+    .btn-warning:hover { background: rgba(247,201,79,.2); }
+
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-full { width: 100%; }
+    .btn-lg { padding: 11px 24px; font-size: 15px; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* Alert */
+    .alert {
+      padding: 10px 14px;
+      border-radius: 7px;
+      margin-bottom: 1rem;
+      font-size: 13px;
+    }
+
+    .alert-success { background: rgba(79,222,138,.1); border: 1px solid rgba(79,222,138,.3); color: var(--green); }
+    .alert-error   { background: rgba(247,79,122,.1);  border: 1px solid rgba(247,79,122,.3);  color: var(--red); }
+
+    /* Category badge */
+    .cat-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--surface2);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    .mono { font-family: var(--font-mono); }
+    .muted { color: var(--muted); }
+
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-delete:hover { background: rgba(247,79,122,.1); color: var(--red); }
+
+    .empty-msg { text-align: center; padding: 2rem; color: var(--muted); font-size: 13px; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+    .filter-bar .form-group { margin-bottom: 0; flex: 0 1 160px; }
+    .filter-meta { color: var(--muted); font-family: var(--font-mono); font-size: 12px; padding-bottom: 8px; }
+
+    /* Section header */
+    .section-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+    .section-hd h3 { font-size: 14px; font-weight: 600; color: var(--text); }
+
+    /* Weekly bar mini chart */
+    .week-bars { display: flex; gap: 4px; align-items: flex-end; height: 60px; }
+    .week-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .week-bar { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; transition: height .3s; }
+    .week-bar-label { font-size: 9px; color: var(--muted); font-family: var(--font-mono); }
+
+    /* Horizontal bar chart */
+    .hbar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .hbar-row { display: flex; align-items: center; gap: 10px; }
+    .hbar-label { width: 150px; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+    .hbar-track { flex: 1; background: var(--surface2); border-radius: 3px; height: 8px; }
+    .hbar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+    .hbar-val { width: 50px; text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
+
+    /* Tabs panes */
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .metric-row { grid-template-columns: repeat(2, 1fr); }
+      .header { flex-wrap: wrap; }
+      .filter-bar { flex-direction: column; }
+      .hbar-label { width: 100px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── User Select ─────────────────────────────────────────────────────── -->
+<div id="screen-user">
+  <div class="user-card">
+    <div class="logo">⏱</div>
+    <h1>Faddom Support Tracker</h1>
+    <p>Select your name to begin</p>
+    <div class="user-grid" id="user-grid"></div>
+  </div>
+</div>
+
+<!-- ── Main App ────────────────────────────────────────────────────────── -->
+<div id="screen-app">
+  <div class="header">
+    <div class="header-brand">
+      <span>⏱</span>
+      <span>Faddom Support Tracker</span>
+    </div>
+    <div class="header-right">
+      <div class="user-pill">
+        <span id="header-user"></span>
+        <span id="header-admin-badge" class="badge badge-admin" style="display:none">ADMIN</span>
+        <button class="btn btn-ghost btn-sm" onclick="switchUser()">Switch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metric cards -->
+  <div class="metric-row" id="metric-row"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="setTab('log', this)">Log Time</button>
+    <button class="tab-btn" onclick="setTab('entries', this)">Entries</button>
+    <button class="tab-btn" onclick="setTab('report', this)">Report</button>
+  </div>
+
+  <!-- Alert zone -->
+  <div id="alert-zone"></div>
+
+  <!-- ── Tab: Log ──────────────────────────────────────────────────────── -->
+  <div id="tab-log" class="tab-pane active">
+    <div class="card">
+      <div class="mode-toggle">
+        <button class="mode-btn active" onclick="setMode('timer', this)">⏱ Live Timer</button>
+        <button class="mode-btn" onclick="setMode('manual', this)">✏ Manual Entry</button>
+      </div>
+
+      <!-- Timer mode -->
+      <div id="mode-timer">
+        <div class="timer-display mono" id="timer-display">00:00:00</div>
+        <div class="form-grid" style="margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Category *</label>
+            <select id="t-category">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Customer / Ticket</label>
+            <input type="text" id="t-customer" placeholder="e.g. ACME Corp, TKT-1234" />
+          </div>
+          <div class="form-group span-full">
+            <label class="form-label">Notes</label>
+            <input type="text" id="t-notes" placeholder="Optional notes…" />
+          </div>
+        </div>
+        <div class="btn-row" id="timer-controls">
+          <button class="btn btn-primary btn-lg" id="btn-start" onclick="timerStart()">▶ Start</button>
+        </div>
+      </div>
+
+      <!-- Manual mode -->
+      <div id="mode-manual" style="display:none">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Category *</label>
+            <select id="m-category">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Duration (minutes) *</label>
+            <input type="number" id="m-minutes" min="1" max="480" value="30" class="mono" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Customer / Ticket</label>
+            <input type="text" id="m-customer" placeholder="e.g. ACME Corp, TKT-1234" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date *</label>
+            <input type="date" id="m-date" />
+          </div>
+          <div class="form-group span-full">
+            <label class="form-label">Notes</label>
+            <input type="text" id="m-notes" placeholder="Optional notes…" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg btn-full" onclick="manualLog()">+ Log Entry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Entries ─────────────────────────────────────────────────── -->
+  <div id="tab-entries" class="tab-pane">
+    <div class="filter-bar">
+      <div class="form-group">
+        <label class="form-label">Month</label>
+        <input type="month" id="e-month" oninput="renderEntries()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select id="e-category" oninput="renderEntries()">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div id="entries-meta" class="filter-meta"></div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ Export CSV</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr id="entries-thead"></tr>
+          </thead>
+          <tbody id="entries-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Report ──────────────────────────────────────────────────── -->
+  <div id="tab-report" class="tab-pane">
+    <div class="filter-bar">
+      <div class="form-group">
+        <label class="form-label">Month</label>
+        <input type="month" id="r-month" oninput="renderReport()" />
+      </div>
+      <div id="r-user-filter" class="form-group" style="display:none">
+        <label class="form-label">User</label>
+        <select id="r-user" oninput="renderReport()">
+          <option value="">All Users</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Hours by Category</div>
+      <div id="chart-category" class="hbar-chart"></div>
+    </div>
+
+    <div class="card" id="chart-user-card" style="display:none">
+      <div class="card-title">Hours by Team Member</div>
+      <div id="chart-user" class="hbar-chart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Last 7 Days</div>
+      <div class="week-bars" id="chart-week"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const USERS = ['Egor', 'Yonatan', 'Mariano', 'Ben'];
+const ADMIN = 'Egor';
+
+const CATEGORIES = [
+  { id: 'intercom',      label: 'Intercom Ticket',      color: '#4f8ef7' },
+  { id: 'debug',         label: 'Debug / Lab Repro',    color: '#f7c94f' },
+  { id: 'call',          label: 'Customer Call / Demo', color: '#4fde8a' },
+  { id: 'meeting',       label: 'Internal Meeting',     color: '#a04ff7' },
+  { id: 'docs',          label: 'Documentation / KB',   color: '#4fe8f7' },
+  { id: 'email',         label: 'Email / Async Comms',  color: '#f78a4f' },
+  { id: 'escalation',    label: 'Escalation to Dev',    color: '#f74f7a' },
+  { id: 'office-it',     label: 'Office IT',            color: '#a0a0a0' },
+  { id: 'other',         label: 'Other',                color: '#6b7594' },
+];
+
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+
+// Metric cards config: [id, label, accent-color, category-ids or 'total']
+const METRIC_CFG = [
+  ['total',    'Today Total',  '#4f8ef7', 'total'],
+  ['intercom', 'Intercom',     '#4f8ef7', ['intercom']],
+  ['calls',    'Calls',        '#4fde8a', ['call']],
+  ['meetings', 'Meetings',     '#a04ff7', ['meeting']],
+  ['it',       'Office IT',    '#a0a0a0', ['office-it']],
+  ['other',    'Other',        '#6b7594', ['debug','docs','email','escalation','other']],
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+let activeUser = null;
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+let timerAccum = 0;
+let timerAnchor = 0;
+
+function loadEntries() {
+  return JSON.parse(localStorage.getItem('st_entries') || '[]');
+}
+
+function saveEntries(entries) {
+  localStorage.setItem('st_entries', JSON.stringify(entries));
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function currentMonthISO() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function formatMins(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatSecs(s) {
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  return `${h}:${m}:${sec}`;
+}
+
+// ── User Select ───────────────────────────────────────────────────────────────
+function initUserSelect() {
+  const grid = document.getElementById('user-grid');
+  grid.innerHTML = USERS.map(u =>
+    `<button class="user-btn${u === ADMIN ? ' admin' : ''}" onclick="selectUser('${u}')">${u}${u === ADMIN ? '<br><small>Admin</small>' : ''}</button>`
+  ).join('');
+}
+
+function selectUser(user) {
+  activeUser = user;
+  document.getElementById('screen-user').style.display = 'none';
+  document.getElementById('screen-app').style.display = 'block';
+  document.getElementById('header-user').textContent = user;
+  document.getElementById('header-admin-badge').style.display = user === ADMIN ? 'inline' : 'none';
+
+  if (user === ADMIN) {
+    document.getElementById('r-user-filter').style.display = '';
+    document.getElementById('chart-user-card').style.display = '';
+    const rUserSel = document.getElementById('r-user');
+    rUserSel.innerHTML = '<option value="">All Users</option>' +
+      USERS.map(u => `<option value="${u}">${u}</option>`).join('');
+  }
+
+  // Populate category selects
+  const opts = CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+  document.getElementById('t-category').innerHTML = '<option value="">— Select —</option>' + opts;
+  document.getElementById('m-category').innerHTML = '<option value="">— Select —</option>' + opts;
+  document.getElementById('e-category').innerHTML = '<option value="">All categories</option>' + opts;
+
+  // Default date
+  document.getElementById('m-date').value = todayISO();
+  document.getElementById('e-month').value = currentMonthISO();
+  document.getElementById('r-month').value = currentMonthISO();
+
+  updateMetrics();
+  renderEntries();
+  renderReport();
+}
+
+function switchUser() {
+  timerReset();
+  activeUser = null;
+  document.getElementById('screen-app').style.display = 'none';
+  document.getElementById('screen-user').style.display = 'flex';
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+function updateMetrics() {
+  const today = todayISO();
+  const entries = loadEntries().filter(e => e.date === today && (activeUser === ADMIN || e.user === activeUser));
+
+  const totals = {};
+  CATEGORIES.forEach(c => { totals[c.id] = 0; });
+  entries.forEach(e => { totals[e.category] = (totals[e.category] || 0) + e.minutes; });
+  const totalMins = Object.values(totals).reduce((a, b) => a + b, 0);
+
+  const row = document.getElementById('metric-row');
+  row.innerHTML = METRIC_CFG.map(([id, label, color, cats]) => {
+    let mins;
+    if (cats === 'total') mins = totalMins;
+    else mins = cats.reduce((s, c) => s + (totals[c] || 0), 0);
+    const hrs = (mins / 60).toFixed(1);
+    return `
+      <div class="metric-card" style="--c:${color}">
+        <div class="metric-label">${label}</div>
+        <div class="metric-value">${hrs}<span style="font-size:13px;color:var(--muted)">h</span></div>
+        <div class="metric-sub">${formatMins(mins)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Alert ─────────────────────────────────────────────────────────────────────
+let alertTimer;
+
+function showAlert(msg, type = 'success') {
+  clearTimeout(alertTimer);
+  const zone = document.getElementById('alert-zone');
+  zone.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  alertTimer = setTimeout(() => { zone.innerHTML = ''; }, 4000);
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+function timerTick() {
+  timerSeconds = timerAccum + Math.floor((Date.now() - timerAnchor) / 1000);
+  const el = document.getElementById('timer-display');
+  el.textContent = formatSecs(timerSeconds);
+  el.classList.toggle('running', true);
+}
+
+function timerStart() {
+  const cat = document.getElementById('t-category').value;
+  if (!cat) { showAlert('Please select a category.', 'error'); return; }
+  timerAnchor = Date.now();
+  timerRunning = true;
+  timerInterval = setInterval(timerTick, 500);
+  renderTimerControls();
+  document.getElementById('t-category').disabled = true;
+}
+
+function timerPause() {
+  clearInterval(timerInterval);
+  timerAccum = timerSeconds;
+  timerRunning = false;
+  renderTimerControls();
+}
+
+function timerResume() {
+  timerAnchor = Date.now();
+  timerRunning = true;
+  timerInterval = setInterval(timerTick, 500);
+  renderTimerControls();
+}
+
+function timerReset() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerSeconds = 0;
+  timerAccum = 0;
+  timerRunning = false;
+  const el = document.getElementById('timer-display');
+  if (el) { el.textContent = '00:00:00'; el.classList.remove('running'); }
+  document.getElementById('t-category').disabled = false;
+  renderTimerControls();
+}
+
+async function timerSave() {
+  if (timerSeconds < 30) { showAlert('Timer too short (< 30 seconds).', 'error'); return; }
+  const cat = document.getElementById('t-category').value;
+  const customer = document.getElementById('t-customer').value.trim();
+  const notes = document.getElementById('t-notes').value.trim();
+  const minutes = Math.max(1, Math.round(timerSeconds / 60));
+
+  addEntry({ category: cat, customer, notes, minutes, date: todayISO() });
+  showAlert(`Logged ${formatMins(minutes)} · ${CAT_MAP[cat].label}${customer ? ' · ' + customer : ''}`);
+  timerReset();
+  document.getElementById('t-customer').value = '';
+  document.getElementById('t-notes').value = '';
+  document.getElementById('t-category').value = '';
+}
+
+function renderTimerControls() {
+  const ctrl = document.getElementById('timer-controls');
+  const hasStarted = timerSeconds > 0 || timerRunning;
+  if (!hasStarted) {
+    ctrl.innerHTML = `<button class="btn btn-primary btn-lg" onclick="timerStart()">▶ Start</button>`;
+  } else if (timerRunning) {
+    ctrl.innerHTML = `<button class="btn btn-warning btn-lg" onclick="timerPause()">⏸ Pause</button>`;
+  } else {
+    ctrl.innerHTML = `
+      <button class="btn btn-primary btn-lg" onclick="timerResume()">▶ Resume</button>
+      <button class="btn btn-success btn-lg" onclick="timerSave()">✓ Save</button>
+      <button class="btn btn-ghost" onclick="timerReset()">✕ Reset</button>`;
+  }
+}
+
+// ── Manual Log ────────────────────────────────────────────────────────────────
+function manualLog() {
+  const cat = document.getElementById('m-category').value;
+  const minutes = parseInt(document.getElementById('m-minutes').value) || 0;
+  const customer = document.getElementById('m-customer').value.trim();
+  const notes = document.getElementById('m-notes').value.trim();
+  const date = document.getElementById('m-date').value;
+
+  if (!cat) { showAlert('Please select a category.', 'error'); return; }
+  if (minutes <= 0) { showAlert('Enter a valid duration.', 'error'); return; }
+  if (!date) { showAlert('Please select a date.', 'error'); return; }
+
+  addEntry({ category: cat, customer, notes, minutes, date });
+  showAlert(`Logged ${formatMins(minutes)} · ${CAT_MAP[cat].label}${customer ? ' · ' + customer : ''}`);
+
+  document.getElementById('m-category').value = '';
+  document.getElementById('m-minutes').value = '30';
+  document.getElementById('m-customer').value = '';
+  document.getElementById('m-notes').value = '';
+  document.getElementById('m-date').value = todayISO();
+}
+
+// ── Entries CRUD ──────────────────────────────────────────────────────────────
+function addEntry({ category, customer, notes, minutes, date }) {
+  const entries = loadEntries();
+  entries.push({
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    user: activeUser,
+    category,
+    customer,
+    notes,
+    minutes,
+    date,
+    createdAt: new Date().toISOString(),
+  });
+  saveEntries(entries);
+  updateMetrics();
+  renderEntries();
+  renderReport();
+}
+
+function deleteEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  const entries = loadEntries().filter(e => !(e.id === id && (activeUser === ADMIN || e.user === activeUser)));
+  saveEntries(entries);
+  updateMetrics();
+  renderEntries();
+  renderReport();
+}
+
+// ── Entries Tab ───────────────────────────────────────────────────────────────
+function renderEntries() {
+  const month = document.getElementById('e-month').value;
+  const catFilter = document.getElementById('e-category').value;
+  const isAdmin = activeUser === ADMIN;
+
+  let entries = loadEntries().filter(e => {
+    if (!isAdmin && e.user !== activeUser) return false;
+    if (month && !e.date.startsWith(month)) return false;
+    if (catFilter && e.category !== catFilter) return false;
+    return true;
+  }).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+
+  const totalMins = entries.reduce((s, e) => s + e.minutes, 0);
+  document.getElementById('entries-meta').textContent =
+    `${entries.length} entries · ${formatMins(totalMins)} total`;
+
+  const thead = document.getElementById('entries-thead');
+  thead.innerHTML = `
+    <th>Date</th>
+    ${isAdmin ? '<th>User</th>' : ''}
+    <th>Category</th>
+    <th>Customer / Ticket</th>
+    <th>Notes</th>
+    <th>Duration</th>
+    <th></th>`;
+
+  const tbody = document.getElementById('entries-tbody');
+  if (entries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}" class="empty-msg">No entries for this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = entries.map(e => {
+    const cat = CAT_MAP[e.category] || { label: e.category, color: '#6b7594' };
+    const canDel = isAdmin || e.user === activeUser;
+    return `
+      <tr>
+        <td class="mono">${e.date}</td>
+        ${isAdmin ? `<td>${e.user}</td>` : ''}
+        <td><span class="cat-badge" style="background:${cat.color}22;color:${cat.color};border:1px solid ${cat.color}44">${cat.label}</span></td>
+        <td>${e.customer || '<span class="muted">—</span>'}</td>
+        <td class="muted">${e.notes || '—'}</td>
+        <td class="mono">${formatMins(e.minutes)}</td>
+        <td>${canDel ? `<button class="btn-delete" onclick="deleteEntry('${e.id}')" title="Delete">✕</button>` : ''}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ── Report Tab ────────────────────────────────────────────────────────────────
+function renderReport() {
+  const month = document.getElementById('r-month').value;
+  const isAdmin = activeUser === ADMIN;
+  const userFilter = isAdmin ? document.getElementById('r-user').value : activeUser;
+
+  let entries = loadEntries().filter(e => {
+    if (!e.date.startsWith(month)) return false;
+    if (userFilter && e.user !== userFilter) return false;
+    if (!isAdmin && e.user !== activeUser) return false;
+    return true;
+  });
+
+  // By category
+  const byCat = {};
+  CATEGORIES.forEach(c => { byCat[c.id] = 0; });
+  entries.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + e.minutes; });
+  const maxCat = Math.max(...Object.values(byCat), 1);
+
+  document.getElementById('chart-category').innerHTML = CATEGORIES
+    .filter(c => byCat[c.id] > 0)
+    .sort((a, b) => byCat[b.id] - byCat[a.id])
+    .map(c => `
+      <div class="hbar-row">
+        <div class="hbar-label">${c.label}</div>
+        <div class="hbar-track">
+          <div class="hbar-fill" style="width:${(byCat[c.id]/maxCat*100).toFixed(1)}%;background:${c.color}"></div>
+        </div>
+        <div class="hbar-val">${(byCat[c.id]/60).toFixed(1)}h</div>
+      </div>`).join('') || '<div class="empty-msg">No data for this period.</div>';
+
+  // By user (admin only)
+  if (isAdmin) {
+    const byUser = {};
+    USERS.forEach(u => { byUser[u] = 0; });
+    entries.forEach(e => { byUser[e.user] = (byUser[e.user] || 0) + e.minutes; });
+    const maxU = Math.max(...Object.values(byUser), 1);
+    const USER_COLORS = { Egor: '#4f8ef7', Yonatan: '#4fde8a', Mariano: '#f7c94f', Ben: '#a04ff7' };
+
+    document.getElementById('chart-user').innerHTML = USERS
+      .filter(u => byUser[u] > 0)
+      .sort((a, b) => byUser[b] - byUser[a])
+      .map(u => `
+        <div class="hbar-row">
+          <div class="hbar-label">${u}</div>
+          <div class="hbar-track">
+            <div class="hbar-fill" style="width:${(byUser[u]/maxU*100).toFixed(1)}%;background:${USER_COLORS[u]||'#4f8ef7'}"></div>
+          </div>
+          <div class="hbar-val">${(byUser[u]/60).toFixed(1)}h</div>
+        </div>`).join('') || '<div class="empty-msg">No data for this period.</div>';
+  }
+
+  // Last 7 days
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  const dayMins = {};
+  days.forEach(d => { dayMins[d] = 0; });
+  loadEntries().filter(e => days.includes(e.date) && (!userFilter || e.user === userFilter) && (isAdmin || e.user === activeUser))
+    .forEach(e => { dayMins[e.date] += e.minutes; });
+
+  const maxDay = Math.max(...Object.values(dayMins), 1);
+
+  document.getElementById('chart-week').innerHTML = days.map(d => {
+    const mins = dayMins[d];
+    const h = Math.max(2, Math.round(mins / maxDay * 55));
+    const label = new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+    return `
+      <div class="week-bar-wrap">
+        <div class="week-bar" style="height:${h}px;opacity:${mins>0?1:.2}" title="${formatMins(mins)}"></div>
+        <div class="week-bar-label">${label}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const month = document.getElementById('e-month').value;
+  const catFilter = document.getElementById('e-category').value;
+  const isAdmin = activeUser === ADMIN;
+
+  const entries = loadEntries().filter(e => {
+    if (!isAdmin && e.user !== activeUser) return false;
+    if (month && !e.date.startsWith(month)) return false;
+    if (catFilter && e.category !== catFilter) return false;
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  if (entries.length === 0) { showAlert('No entries to export.', 'error'); return; }
+
+  const headers = ['Date', 'User', 'Category', 'Customer/Ticket', 'Notes', 'Minutes', 'Hours'];
+  const rows = entries.map(e => {
+    const cat = CAT_MAP[e.category]?.label || e.category;
+    return [e.date, e.user, cat, e.customer || '', e.notes || '', e.minutes, (e.minutes / 60).toFixed(2)];
+  });
+
+  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `faddom-tracker-${month || 'all'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Tabs / Modes ──────────────────────────────────────────────────────────────
+function setTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'entries') renderEntries();
+  if (id === 'report') renderReport();
+}
+
+function setMode(mode, btn) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mode-timer').style.display = mode === 'timer' ? '' : 'none';
+  document.getElementById('mode-manual').style.display = mode === 'manual' ? '' : 'none';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initUserSelect();
+</script>
+</body>
+</html>
